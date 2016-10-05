@@ -1,0 +1,113 @@
+group "com.github.izhangzhihao"
+version "1.0-SNAPSHOT"
+
+apply plugin: "java"
+apply plugin: "jacoco"
+apply plugin: "idea"
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+def SpringVersion = "4.3.2.RELEASE"
+def POIVersion = "3.15-beta2"
+
+
+repositories {
+    mavenLocal()
+    maven { url "http://maven.aliyun.com/nexus/content/groups/public/" }
+    jcenter()
+    mavenCentral()
+    maven { url "http://repo.spring.io/release" }
+    maven { url "https://repo.spring.io/libs-snapshot" }
+}
+
+dependencies {
+    compile(
+            // spring framework
+            "org.springframework:spring-beans:${SpringVersion}",
+            "org.springframework:spring-aop:${SpringVersion}",
+            "org.springframework:spring-aspects:${SpringVersion}",
+            "org.springframework:spring-core:${SpringVersion}",
+
+            //apache
+            "commons-fileupload:commons-fileupload:1.3.2",
+            "org.apache.commons:commons-lang3:3.4",//深拷贝
+
+            //jUnit
+            "junit:junit:4.12",
+
+            //@NotNull
+            "org.jetbrains:annotations:15.0",
+
+            //Lombok
+            "org.projectlombok:lombok:1.16.10",
+
+            //POI
+            "org.apache.poi:poi:$POIVersion",
+            "org.apache.poi:poi-ooxml:$POIVersion",
+            "org.apache.poi:poi-scratchpad:$POIVersion",
+            "org.apache.poi:poi-ooxml-schemas:$POIVersion",
+            "org.apache.xmlbeans:xmlbeans:2.6.0",
+            "org.apache.poi:poi-excelant:$POIVersion",
+
+            //
+            "com.lowagie:itext:2.1.7",
+            //"com.lowagie:itext-rtf:2.1.7",
+
+            "org.docx4j:docx4j:3.3.1",
+            "org.docx4j:docx4j-export-fo:3.3.0",
+
+            "org.codehaus.groovy:groovy:2.4.7",
+
+            //slf4j
+            //"org.slf4j:slf4j-log4j12:1.7.21",
+            //"org.slf4j:slf4j-jdk14:1.7.21",
+            "org.slf4j:jcl-over-slf4j:1.7.21",//jcl-over-slf4j 把 Commons-Logging 桥接到 Slf4J，然后 Logback。
+            "ch.qos.logback:logback-core:1.1.7",
+            "ch.qos.logback:logback-classic:1.1.7",
+    )
+    testCompile(
+            //jUnit
+            "junit:junit:4.12",
+    )
+}
+
+task copyJars(type: Copy) {
+    from configurations.runtime
+    into "lib" //复制到lib目录
+}
+
+//让gradle支持中文
+tasks.withType(JavaCompile) {
+    options.encoding = "UTF-8"
+}
+
+test {
+    useJUnit()
+    // listen to events in the test execution lifecycle
+    beforeTest { descriptor ->
+        logger.lifecycle("Running test: " + descriptor)
+    }
+
+    // listen to standard out and standard error of the test JVM(s)
+    onOutput { descriptor, event ->
+        logger.lifecycle("Test: " + descriptor + " produced standard out/err: " + event.message)
+    }
+
+    jacoco {
+        destinationFile = file("$buildDir/jacoco/test.exec")
+    }
+}
+
+jacocoTestReport {
+    reports {
+        xml.enabled false
+        csv.enabled false
+        html.destination "${buildDir}/jacocoHtml"
+    }
+}
+
+build.dependsOn jacocoTestReport
+
+task integrationTest(type: Test) {
+    include "test/java/**"
+}
