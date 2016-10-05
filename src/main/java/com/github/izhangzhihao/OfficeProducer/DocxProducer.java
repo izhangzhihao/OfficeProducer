@@ -1,6 +1,7 @@
 package com.github.izhangzhihao.OfficeProducer;
 
 
+import lombok.Cleanup;
 import org.apache.commons.io.IOUtils;
 import org.docx4j.Docx4J;
 import org.docx4j.TraversalUtil;
@@ -18,8 +19,10 @@ import java.io.*;
 import java.util.HashMap;
 import java.util.List;
 
-@SuppressWarnings({"JavaDoc", "SpellCheckingInspection"})
+@SuppressWarnings({"JavaDoc", "SpellCheckingInspection", "WeakerAccess", "unused"})
 public class DocxProducer {
+
+
     /**
      * 创建Docx的主方法
      *
@@ -28,11 +31,11 @@ public class DocxProducer {
      * @param imageParameters 书签和图片
      * @return
      */
-    public static OutputStream CreateDocxFromTemplate(String TemplatePath,
-                                                      HashMap<String, String> parameters,
-                                                      HashMap<String, String> imageParameters,
-                                                      String savePath) throws Exception {
-        InputStream docxStream = DocxProducer.class.getResourceAsStream(TemplatePath);
+    private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String TemplatePath,
+                                                                                     HashMap<String, String> parameters,
+                                                                                     HashMap<String, String> imageParameters)
+            throws Exception {
+        @Cleanup InputStream docxStream = DocxProducer.class.getResourceAsStream(TemplatePath);
         WordprocessingMLPackage wordMLPackage = WordprocessingMLPackage.load(docxStream);
         MainDocumentPart documentPart = wordMLPackage.getMainDocumentPart();
 
@@ -41,27 +44,82 @@ public class DocxProducer {
 
         //第二步 插入图片
         replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
+        return wordMLPackage;
+    }
 
-        //保存不需加密的docx
-        //wordMLPackage.save(new FileOutputStream("D:/Desktop/test.docx"));
-
-        //转化成PDF
-        //convertDocxToPDF(wordMLPackage, "D:/Desktop/test.pdf");
-
-        //加密
-        ProtectDocument protection = new ProtectDocument(wordMLPackage);
-        protection.restrictEditing(STDocProtect.READ_ONLY, "951753");
+    /**
+     * 创建Docx并保存
+     *
+     * @param TemplatePath    模板docx路径
+     * @param parameters      参数和值
+     * @param imageParameters 书签和图片
+     * @param savePath        保存docx的路径
+     * @return
+     */
+    public static void CreateDocxFromTemplate(String TemplatePath,
+                                              HashMap<String, String> parameters,
+                                              HashMap<String, String> imageParameters,
+                                              String savePath)
+            throws Exception {
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(TemplatePath, parameters, imageParameters);
 
         //保存
         saveDocx(wordMLPackage, savePath);
+    }
 
-        return null;
+
+    /**
+     * 创建Docx并加密保存
+     *
+     * @param TemplatePath    模板docx路径
+     * @param parameters      参数和值
+     * @param imageParameters 书签和图片
+     * @param savePath        保存docx的路径
+     * @return
+     */
+    public static void CreateEncryptDocxFromTemplate(String TemplatePath,
+                                                     HashMap<String, String> parameters,
+                                                     HashMap<String, String> imageParameters,
+                                                     String savePath,
+                                                     String passWord)
+            throws Exception {
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(TemplatePath, parameters, imageParameters);
+
+        //加密
+        ProtectDocument protection = new ProtectDocument(wordMLPackage);
+        protection.restrictEditing(STDocProtect.READ_ONLY, passWord);
+
+        //保存
+        saveDocx(wordMLPackage, savePath);
+    }
+
+    /**
+     * 从Docx模板文件创建Docx然后转化为pdf
+     *
+     * @param TemplatePath    模板docx路径
+     * @param parameters      参数和值
+     * @param imageParameters 书签和图片
+     * @param savePath        保存pdf的路径
+     * @return
+     */
+    public static void CreatePDFFromDocxTemplate(String TemplatePath,
+                                                 HashMap<String, String> parameters,
+                                                 HashMap<String, String> imageParameters,
+                                                 String savePath)
+            throws Exception {
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(TemplatePath, parameters, imageParameters);
+
+        //转化成PDF
+        convertDocxToPDF(wordMLPackage, savePath);
+
     }
 
     /**
      * 保存当前Docx文件
      */
-    private static void saveDocx(WordprocessingMLPackage wordMLPackage, String savePath) throws FileNotFoundException, Docx4JException {
+    private static void saveDocx(WordprocessingMLPackage wordMLPackage,
+                                 String savePath)
+            throws FileNotFoundException, Docx4JException {
         Docx4J.save(wordMLPackage, new File(savePath), Docx4J.FLAG_SAVE_ZIP_FILE);
     }
 
