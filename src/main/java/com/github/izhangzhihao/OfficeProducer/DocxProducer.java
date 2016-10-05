@@ -19,6 +19,9 @@ import java.io.*;
 import java.util.HashMap;
 import java.util.List;
 
+/**
+ * 创建、操作Docx的一系列方法
+ */
 @SuppressWarnings({"JavaDoc", "SpellCheckingInspection", "WeakerAccess", "unused"})
 public class DocxProducer {
 
@@ -26,16 +29,16 @@ public class DocxProducer {
     /**
      * 创建Docx的主方法
      *
-     * @param TemplatePath    模板docx路径
+     * @param templatePath    模板docx路径
      * @param parameters      参数和值
      * @param imageParameters 书签和图片
      * @return
      */
-    private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String TemplatePath,
+    private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String templatePath,
                                                                                      HashMap<String, String> parameters,
                                                                                      HashMap<String, String> imageParameters)
             throws Exception {
-        @Cleanup InputStream docxStream = DocxProducer.class.getResourceAsStream(TemplatePath);
+        @Cleanup InputStream docxStream = DocxProducer.class.getResourceAsStream(templatePath);
         WordprocessingMLPackage wordMLPackage = WordprocessingMLPackage.load(docxStream);
         MainDocumentPart documentPart = wordMLPackage.getMainDocumentPart();
 
@@ -50,18 +53,18 @@ public class DocxProducer {
     /**
      * 创建Docx并保存
      *
-     * @param TemplatePath    模板docx路径
+     * @param templatePath    模板docx路径
      * @param parameters      参数和值
      * @param imageParameters 书签和图片
      * @param savePath        保存docx的路径
      * @return
      */
-    public static void CreateDocxFromTemplate(String TemplatePath,
+    public static void CreateDocxFromTemplate(String templatePath,
                                               HashMap<String, String> parameters,
                                               HashMap<String, String> imageParameters,
                                               String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(TemplatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
 
         //保存
         saveDocx(wordMLPackage, savePath);
@@ -71,19 +74,19 @@ public class DocxProducer {
     /**
      * 创建Docx并加密保存
      *
-     * @param TemplatePath    模板docx路径
+     * @param templatePath    模板docx路径
      * @param parameters      参数和值
      * @param imageParameters 书签和图片
      * @param savePath        保存docx的路径
      * @return
      */
-    public static void CreateEncryptDocxFromTemplate(String TemplatePath,
+    public static void CreateEncryptDocxFromTemplate(String templatePath,
                                                      HashMap<String, String> parameters,
                                                      HashMap<String, String> imageParameters,
                                                      String savePath,
                                                      String passWord)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(TemplatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
 
         //加密
         ProtectDocument protection = new ProtectDocument(wordMLPackage);
@@ -96,18 +99,18 @@ public class DocxProducer {
     /**
      * 从Docx模板文件创建Docx然后转化为pdf
      *
-     * @param TemplatePath    模板docx路径
+     * @param templatePath    模板docx路径
      * @param parameters      参数和值
      * @param imageParameters 书签和图片
      * @param savePath        保存pdf的路径
      * @return
      */
-    public static void CreatePDFFromDocxTemplate(String TemplatePath,
+    public static void CreatePDFFromDocxTemplate(String templatePath,
                                                  HashMap<String, String> parameters,
                                                  HashMap<String, String> imageParameters,
                                                  String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(TemplatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
 
         //转化成PDF
         convertDocxToPDF(wordMLPackage, savePath);
