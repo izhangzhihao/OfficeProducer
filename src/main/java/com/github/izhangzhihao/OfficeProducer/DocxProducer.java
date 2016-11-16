@@ -45,6 +45,7 @@ public class DocxProducer {
      */
     private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String templatePath,
                                                                                      HashMap<String, String> parameters,
+                                                                                     HashMap<DataFieldName, String> bookMarkParameters,
                                                                                      HashMap<String, String> imageParameters)
             throws Exception {
         @Cleanup InputStream docxStream = DocxProducer.class.getResourceAsStream(templatePath);
@@ -52,7 +53,12 @@ public class DocxProducer {
         MainDocumentPart documentPart = wordMLPackage.getMainDocumentPart();
 
         //第一步 替换字符参数
-        replaceParameters(documentPart, parameters);
+        if (parameters != null) {
+            replaceParameters(documentPart, parameters);
+        } else {
+            //或者替换书签为文字
+            replaceBookmarkContents(documentPart, bookMarkParameters);
+        }
 
         //第二步 插入图片
         replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
@@ -70,10 +76,11 @@ public class DocxProducer {
      */
     public static void CreateDocxFromTemplate(String templatePath,
                                               HashMap<String, String> parameters,
+                                              HashMap<DataFieldName, String> bookMarkParameters,
                                               HashMap<String, String> imageParameters,
                                               String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
 
         //保存
         saveDocx(wordMLPackage, savePath);
@@ -91,11 +98,12 @@ public class DocxProducer {
      */
     public static void CreateEncryptDocxFromTemplate(String templatePath,
                                                      HashMap<String, String> parameters,
+                                                     HashMap<DataFieldName, String> bookMarkParameters,
                                                      HashMap<String, String> imageParameters,
                                                      String savePath,
                                                      String passWord)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
 
         //加密
         ProtectDocument protection = new ProtectDocument(wordMLPackage);
@@ -116,10 +124,11 @@ public class DocxProducer {
      */
     public static void CreatePDFFromDocxTemplate(String templatePath,
                                                  HashMap<String, String> parameters,
+                                                 HashMap<DataFieldName, String> bookMarkParameters,
                                                  HashMap<String, String> imageParameters,
                                                  String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
 
         //转化成PDF
         convertDocxToPDF(wordMLPackage, savePath);
@@ -146,7 +155,17 @@ public class DocxProducer {
     private static void replaceParameters(MainDocumentPart documentPart,
                                           HashMap<String, String> parameters)
             throws JAXBException, Docx4JException {
+        // Approach 1 (from 3.0.0; faster if you haven't yet caused unmarshalling to occur):
         documentPart.variableReplace(parameters);
+
+        // Approach 2 (original)
+
+        // unmarshallFromTemplate requires string input
+        /*String xml = XmlUtils.marshaltoString(documentPart.getContents(), true);
+        // Do it...
+        Object obj = XmlUtils.unmarshallFromTemplate(xml, parameters);
+        // Inject result into docx
+        documentPart.setJaxbElement((Document) obj);*/
     }
 
     /**
@@ -250,7 +269,6 @@ public class DocxProducer {
                 // since in the parent, it may be wrapped in a JAXBElement
                 List<Object> theList = null;
                 if (bm.getParent() instanceof P) {
-                    System.out.println("OK!");
                     theList = ((ContentAccessor) (bm.getParent())).getContent();
                 } else {
                     continue;
@@ -300,8 +318,5 @@ public class DocxProducer {
                 log.error(cce.getMessage(), cce);
             }
         }
-
-
     }
-
 }
