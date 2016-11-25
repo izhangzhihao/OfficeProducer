@@ -15,10 +15,10 @@ import static com.github.izhangzhihao.OfficeProducer.DocxProducer.CreateEncryptD
 public class DocxProducerTest {
     @Test
     public void CreateEncryptDocxFromTemplateTest() throws Exception {
-        String templatePath = "/Template/2.docx";
+        String templatePath = "/Template/10.docx";
         HashMap<String, String> parameters = new HashMap<>();
-        parameters.put("colour", "green");
-        parameters.put("icecream", "chocolate");
+        parameters.put("colour", "绿色");
+        parameters.put("icecream", "巧克力");
         HashMap<String, String> imageParameters = new HashMap<>();
         String prefix = "D:/头像/";
         imageParameters.put("bookmark", prefix + "/33.png");

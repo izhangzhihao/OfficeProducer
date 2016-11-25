@@ -54,7 +54,7 @@ dependencies {
             //"com.lowagie:itext-rtf:2.1.7",
 
             "org.docx4j:docx4j:3.3.1",
-            "org.docx4j:docx4j-export-fo:3.3.0",
+            "org.docx4j:docx4j-export-fo:3.3.1",
 
             "org.codehaus.groovy:groovy:2.4.7",
 
