@@ -2,11 +2,15 @@ package com.github.izhangzhihao.OfficeProducer;
 
 
 import lombok.Cleanup;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
 import org.docx4j.Docx4J;
 import org.docx4j.TraversalUtil;
+import org.docx4j.XmlUtils;
 import org.docx4j.dml.wordprocessingDrawing.Inline;
 import org.docx4j.finders.RangeFinder;
+import org.docx4j.jaxb.Context;
+import org.docx4j.model.fields.merge.DataFieldName;
 import org.docx4j.openpackaging.exceptions.Docx4JException;
 import org.docx4j.openpackaging.packages.ProtectDocument;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
@@ -18,13 +22,18 @@ import javax.xml.bind.JAXBException;
 import java.io.*;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 创建、操作Docx的一系列方法
  */
 @SuppressWarnings({"JavaDoc", "SpellCheckingInspection", "WeakerAccess", "unused"})
+@Slf4j
 public class DocxProducer {
 
+    private static boolean DELETE_BOOKMARK = false;
+
+    private static org.docx4j.wml.ObjectFactory factory = Context.getWmlObjectFactory();
 
     /**
      * 创建Docx的主方法
@@ -36,6 +45,7 @@ public class DocxProducer {
      */
     private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String templatePath,
                                                                                      HashMap<String, String> parameters,
+                                                                                     HashMap<DataFieldName, String> bookMarkParameters,
                                                                                      HashMap<String, String> imageParameters)
             throws Exception {
         @Cleanup InputStream docxStream = DocxProducer.class.getResourceAsStream(templatePath);
@@ -43,7 +53,12 @@ public class DocxProducer {
         MainDocumentPart documentPart = wordMLPackage.getMainDocumentPart();
 
         //第一步 替换字符参数
-        replaceParameters(documentPart, parameters);
+        if (parameters != null) {
+            replaceParameters(documentPart, parameters);
+        } else {
+            //或者替换书签为文字
+            replaceBookmarkContents(documentPart, bookMarkParameters);
+        }
 
         //第二步 插入图片
         replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
@@ -61,10 +76,11 @@ public class DocxProducer {
      */
     public static void CreateDocxFromTemplate(String templatePath,
                                               HashMap<String, String> parameters,
+                                              HashMap<DataFieldName, String> bookMarkParameters,
                                               HashMap<String, String> imageParameters,
                                               String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
 
         //保存
         saveDocx(wordMLPackage, savePath);
@@ -82,11 +98,12 @@ public class DocxProducer {
      */
     public static void CreateEncryptDocxFromTemplate(String templatePath,
                                                      HashMap<String, String> parameters,
+                                                     HashMap<DataFieldName, String> bookMarkParameters,
                                                      HashMap<String, String> imageParameters,
                                                      String savePath,
                                                      String passWord)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
 
         //加密
         ProtectDocument protection = new ProtectDocument(wordMLPackage);
@@ -107,10 +124,11 @@ public class DocxProducer {
      */
     public static void CreatePDFFromDocxTemplate(String templatePath,
                                                  HashMap<String, String> parameters,
+                                                 HashMap<DataFieldName, String> bookMarkParameters,
                                                  HashMap<String, String> imageParameters,
                                                  String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
 
         //转化成PDF
         convertDocxToPDF(wordMLPackage, savePath);
@@ -137,7 +155,17 @@ public class DocxProducer {
     private static void replaceParameters(MainDocumentPart documentPart,
                                           HashMap<String, String> parameters)
             throws JAXBException, Docx4JException {
+        // Approach 1 (from 3.0.0; faster if you haven't yet caused unmarshalling to occur):
         documentPart.variableReplace(parameters);
+
+        // Approach 2 (original)
+
+        // unmarshallFromTemplate requires string input
+        /*String xml = XmlUtils.marshaltoString(documentPart.getContents(), true);
+        // Do it...
+        Object obj = XmlUtils.unmarshallFromTemplate(xml, parameters);
+        // Inject result into docx
+        documentPart.setJaxbElement((Document) obj);*/
     }
 
     /**
@@ -212,4 +240,83 @@ public class DocxProducer {
         Docx4J.toFO(foSettings, fileOutputStream, Docx4J.FLAG_EXPORT_PREFER_XSL);*/
     }
 
+
+    /**
+     * 将书签替换为文字
+     *
+     * @param documentPart
+     * @param data
+     * @throws Exception
+     */
+    private static void replaceBookmarkContents(MainDocumentPart documentPart, Map<DataFieldName, String> data) throws Exception {
+
+        org.docx4j.wml.Document wmlDocumentEl = documentPart.getContents();
+        Body body = wmlDocumentEl.getBody();
+        List<Object> paragraphs = body.getContent();
+
+        RangeFinder rt = new RangeFinder("CTBookmark", "CTMarkupRange");
+        new TraversalUtil(paragraphs, rt);
+
+        for (CTBookmark bm : rt.getStarts()) {
+
+            // do we have data for this one?
+            if (bm.getName() == null) continue;
+            String value = data.get(new DataFieldName(bm.getName()));
+            if (value == null) continue;
+
+            try {
+                // Can't just remove the object from the parent,
+                // since in the parent, it may be wrapped in a JAXBElement
+                List<Object> theList = null;
+                if (bm.getParent() instanceof P) {
+                    theList = ((ContentAccessor) (bm.getParent())).getContent();
+                } else {
+                    continue;
+                }
+
+                int rangeStart = -1;
+                int rangeEnd = -1;
+                int i = 0;
+                for (Object ox : theList) {
+                    Object listEntry = XmlUtils.unwrap(ox);
+                    if (listEntry.equals(bm)) {
+                        if (DELETE_BOOKMARK) {
+                            rangeStart = i;
+                        } else {
+                            rangeStart = i + 1;
+                        }
+                    } else if (listEntry instanceof CTMarkupRange) {
+                        if (((CTMarkupRange) listEntry).getId().equals(bm.getId())) {
+                            if (DELETE_BOOKMARK) {
+                                rangeEnd = i;
+                            } else {
+                                rangeEnd = i - 1;
+                            }
+                            break;
+                        }
+                    }
+                    i++;
+                }
+
+                if (rangeStart > 0 && rangeEnd > rangeStart) {
+
+                    // Delete the bookmark range
+                    for (int j = rangeEnd; j >= rangeStart; j--) {
+                        theList.remove(j);
+                    }
+
+                    // now add a run
+                    org.docx4j.wml.R run = factory.createR();
+                    org.docx4j.wml.Text t = factory.createText();
+                    run.getContent().add(t);
+                    t.setValue(value);
+
+                    theList.add(rangeStart, run);
+                }
+
+            } catch (ClassCastException cce) {
+                log.error(cce.getMessage(), cce);
+            }
+        }
+    }
 }

@@ -8,7 +8,7 @@ import java.io.FileOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.HashMap;
-import java.util.Set;
+import java.util.Map;
 
 /**
  * 创建、操作Doc的一系列方法
@@ -19,25 +19,26 @@ public class DocProducer {
     /**
      * 创建Doc并保存
      *
-     * @param templatePath    模板doc路径
-     * @param parameters      参数和值
-     //* @param imageParameters 书签和图片
-     * @param savePath        保存doc的路径
+     * @param templatePath 模板doc路径
+     * @param parameters   参数和值
+     *                     //* @param imageParameters 书签和图片
+     * @param savePath     保存doc的路径
      * @return
      */
     public static void CreateDocFromTemplate(String templatePath,
-                                              HashMap<String, String> parameters,
-                                              //HashMap<String, String> imageParameters,
-                                              String savePath)
+                                             HashMap<String, String> parameters,
+                                             //HashMap<String, String> imageParameters,
+                                             String savePath)
             throws Exception {
         @Cleanup InputStream is = DocProducer.class.getResourceAsStream(templatePath);
         HWPFDocument doc = new HWPFDocument(is);
         Range range = doc.getRange();
 
         //把range范围内的${}替换
-        Set<String> keys = parameters.keySet();
-        for (String tmpKey : keys) {
-            range.replaceText("${" + tmpKey + "}", String.valueOf(parameters.get(tmpKey)));
+        for (Map.Entry<String, String> next : parameters.entrySet()) {
+            range.replaceText("${" + next.getKey() + "}",
+                    next.getValue()
+            );
         }
 
         @Cleanup OutputStream os = new FileOutputStream(savePath);
