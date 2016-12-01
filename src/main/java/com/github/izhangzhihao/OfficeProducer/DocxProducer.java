@@ -4,6 +4,7 @@ package com.github.izhangzhihao.OfficeProducer;
 import lombok.Cleanup;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.io.IOUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.docx4j.Docx4J;
 import org.docx4j.TraversalUtil;
 import org.docx4j.XmlUtils;
@@ -18,11 +19,10 @@ import org.docx4j.openpackaging.parts.WordprocessingML.BinaryPartAbstractImage;
 import org.docx4j.openpackaging.parts.WordprocessingML.MainDocumentPart;
 import org.docx4j.wml.*;
 
+import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import java.io.*;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 创建、操作Docx的一系列方法
@@ -59,6 +59,52 @@ public class DocxProducer {
             //或者替换书签为文字
             replaceBookmarkContents(documentPart, bookMarkParameters);
         }
+
+        /*String xml = "<w:p xmlns:w =\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\n" +
+                "\t\t\t<w:r>\n" +
+                "\t\t\t\t<w:t>test</w:t>\n" +
+                "\t\t\t</w:r>\n" +
+                "\t\t</w:p>";
+
+        org.docx4j.wml.P para = (P) XmlUtils.unmarshalString(xml);
+
+        appendParaRContent(wordMLPackage, para, "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德");*/
+
+
+        //documentPart.addParagraphOfText("范德萨范德萨发生的范德萨");
+
+        //appendParaRContent(wordMLPackage, "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德");
+
+        List<Object> tables = getAllElementFromObject(documentPart, Tbl.class);
+        final Tbl test = getTemplateTable(tables, "test");
+
+        final List<Object> allElementFromObject = getAllElementFromObject(test, P.class);
+
+        final P p = (P) allElementFromObject.get(1);
+
+        //String str = "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德";
+
+        appendParaRContent(p, "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德");
+
+        /*String as[] = StringUtils.splitPreserveAllTokens(str, '\n');
+        //noinspection Duplicates
+        for (String ptext : as) {
+            // 3. copy the found paragraph to keep styling correct
+            P copy =  XmlUtils.deepCopy(p);
+
+            // replace the text elements from the copy
+            List<?> texts = getAllElementFromObject(copy, Text.class);
+            if (texts.size() > 0) {
+                Text textToReplace = (Text) texts.get(0);
+                textToReplace.setValue(ptext);
+            }
+
+            // add the paragraph to the document
+            test.getContent().add(copy);
+        }
+
+        // 4. remove the original one
+        ((ContentAccessor)p.getParent()).getContent().remove(p);*/
 
         //第二步 插入图片
         replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
@@ -318,5 +364,156 @@ public class DocxProducer {
                 log.error(cce.getMessage(), cce);
             }
         }
+    }
+
+
+    /**
+     * @param wordMLPackage
+     * @param content
+     * @Description: 添加段落内容
+     */
+    public static void appendParaRContent(WordprocessingMLPackage wordMLPackage, String content) {
+        if (content != null) {
+            R run = new R();
+            P p = factory.createP();
+            p.getContent().add(run);
+            String[] contentArr = content.split("\n");
+            Text text = new Text();
+            text.setSpace("preserve");
+            text.setValue("    " + contentArr[0]);
+            run.getContent().add(text);
+
+            for (int i = 1, len = contentArr.length; i < len; i++) {
+                Br br = new Br();
+                run.getContent().add(br);// 换行
+                text = new Text();
+                text.setSpace("preserve");
+                text.setValue("    " + contentArr[i]);
+                run.getContent().add(text);
+            }
+            wordMLPackage.getMainDocumentPart().addObject(p);
+        }
+    }
+
+    /**
+     * @param content
+     * @Description: 添加段落内容
+     */
+    public static void appendParaRContent(P p, String content) {
+        List<?> texts = getAllElementFromObject(p, Text.class);
+        if (texts.size() > 0) {
+            Text textToReplace = (Text) texts.get(0);
+            textToReplace.setValue("");
+        }
+        if (content != null) {
+            R run = new R();
+            p.getContent().add(run);
+            String[] contentArr = content.split("\n");
+            Text text = new Text();
+            text.setSpace("preserve");
+            text.setValue("    " + contentArr[0]);
+            run.getContent().add(text);
+
+            for (int i = 1, len = contentArr.length; i < len; i++) {
+                Br br = new Br();
+                run.getContent().add(br);// 换行
+                text = new Text();
+                text.setSpace("preserve");
+                text.setValue("    " + contentArr[i]);
+                run.getContent().add(text);
+            }
+        }
+    }
+
+    /**
+     * see <a href='http://blog.csdn.net/zhyh1986/article/details/8766628'></a>
+     * 允许你针对一个特定的类来搜索指定元素以及它所有的孩子，例如，你可以用它获取文档中所有的表格、表格中所有的行以及其它类似的操作
+     *
+     * @param obj
+     * @param toSearch
+     * @return
+     */
+    private static List<Object> getAllElementFromObject(Object obj, Class<?> toSearch) {
+        List<Object> result = new ArrayList<>();
+        if (obj instanceof JAXBElement) obj = ((JAXBElement<?>) obj).getValue();
+
+        if (obj.getClass().equals(toSearch))
+            result.add(obj);
+        else if (obj instanceof ContentAccessor) {
+            List<?> children = ((ContentAccessor) obj).getContent();
+            for (Object child : children) {
+                result.addAll(getAllElementFromObject(child, toSearch));
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取模板中的表格
+     *
+     * @param tables
+     * @param templateKey
+     * @return
+     * @throws Docx4JException
+     * @throws JAXBException
+     */
+    private static Tbl getTemplateTable(List<Object> tables, String templateKey) throws Docx4JException, JAXBException {
+        for (Object tbl : tables) {
+            List<?> textElements = getAllElementFromObject(tbl, Text.class);
+            for (Object text : textElements) {
+                Text textElement = (Text) text;
+                if (textElement.getValue() != null && textElement.getValue().equals(templateKey))
+                    return (Tbl) tbl;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 替换段落
+     *
+     * @param placeholder
+     * @param textToAdd
+     * @param template
+     * @param addTo
+     */
+    private static void replaceParagraph(String placeholder, String textToAdd, WordprocessingMLPackage template, ContentAccessor addTo) {
+        // 1. get the paragraph
+        List<Object> paragraphs = getAllElementFromObject(template.getMainDocumentPart(), P.class);
+
+        P toReplace = null;
+        for (Object p : paragraphs) {
+            List<Object> texts = getAllElementFromObject(p, Text.class);
+            for (Object t : texts) {
+                Text content = (Text) t;
+                if (content.getValue().equals(placeholder)) {
+                    toReplace = (P) p;
+                    break;
+                }
+            }
+        }
+
+        // we now have the paragraph that contains our placeholder: toReplace
+        // 2. split into seperate lines
+        String as[] = StringUtils.splitPreserveAllTokens(textToAdd, '\n');
+
+        for (String ptext : as) {
+            // 3. copy the found paragraph to keep styling correct
+            P copy = XmlUtils.deepCopy(toReplace);
+
+            // replace the text elements from the copy
+            List<?> texts = getAllElementFromObject(copy, Text.class);
+            if (texts.size() > 0) {
+                Text textToReplace = (Text) texts.get(0);
+                textToReplace.setValue(ptext);
+            }
+
+            // add the paragraph to the document
+            addTo.getContent().add(copy);
+        }
+
+        // 4. remove the original one
+        ((ContentAccessor) toReplace.getParent()).getContent().remove(toReplace);
+
     }
 }
