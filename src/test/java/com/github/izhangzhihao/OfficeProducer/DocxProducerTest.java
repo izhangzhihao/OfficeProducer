@@ -26,7 +26,10 @@ public class DocxProducerTest {
         HashMap<DataFieldName, String> map = new HashMap<>();
         map.put(new DataFieldName("projectName"), "校级项目");
 
+        HashMap<String, String> paragraphParameters = new HashMap<>();
+        paragraphParameters.put("test", "第三方公司的发生地方\n第三方风格的鬼地方个地方\n规划法国恢复规划法规\nsdfsf电饭锅电饭锅电饭锅地方个dfs");
 
-        CreateEncryptDocxFromTemplate(templatePath, parameters, null, imageParameters, "D:/Desktop/test.docx", UUID.randomUUID().toString());
+
+        CreateEncryptDocxFromTemplate(templatePath, parameters, paragraphParameters, imageParameters, "D:/Desktop/test.docx", UUID.randomUUID().toString());
     }
 }

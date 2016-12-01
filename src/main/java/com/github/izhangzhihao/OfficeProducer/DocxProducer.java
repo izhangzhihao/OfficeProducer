@@ -45,7 +45,7 @@ public class DocxProducer {
      */
     private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String templatePath,
                                                                                      HashMap<String, String> parameters,
-                                                                                     HashMap<DataFieldName, String> bookMarkParameters,
+                                                                                     HashMap<String, String> paragraphParameters,
                                                                                      HashMap<String, String> imageParameters)
             throws Exception {
         @Cleanup InputStream docxStream = DocxProducer.class.getResourceAsStream(templatePath);
@@ -53,62 +53,30 @@ public class DocxProducer {
         MainDocumentPart documentPart = wordMLPackage.getMainDocumentPart();
 
         //第一步 替换字符参数
-        if (parameters != null) {
-            replaceParameters(documentPart, parameters);
-        } else {
-            //或者替换书签为文字
-            replaceBookmarkContents(documentPart, bookMarkParameters);
-        }
+        replaceParameters(documentPart, parameters);
 
-        /*String xml = "<w:p xmlns:w =\"http://schemas.openxmlformats.org/wordprocessingml/2006/main\">\n" +
-                "\t\t\t<w:r>\n" +
-                "\t\t\t\t<w:t>test</w:t>\n" +
-                "\t\t\t</w:r>\n" +
-                "\t\t</w:p>";
+        //第二步 替换段落
+        replaceParagraph(documentPart, paragraphParameters);
 
-        org.docx4j.wml.P para = (P) XmlUtils.unmarshalString(xml);
-
-        appendParaRContent(wordMLPackage, para, "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德");*/
-
-
-        //documentPart.addParagraphOfText("范德萨范德萨发生的范德萨");
-
-        //appendParaRContent(wordMLPackage, "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德");
-
-        List<Object> tables = getAllElementFromObject(documentPart, Tbl.class);
-        final Tbl test = getTemplateTable(tables, "test");
-
-        final List<Object> allElementFromObject = getAllElementFromObject(test, P.class);
-
-        final P p = (P) allElementFromObject.get(1);
-
-        //String str = "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德";
-
-        appendParaRContent(p, "范德萨范德\n范德萨范德\n范德萨范德范德萨范德范德萨范德\n范德萨范德");
-
-        /*String as[] = StringUtils.splitPreserveAllTokens(str, '\n');
-        //noinspection Duplicates
-        for (String ptext : as) {
-            // 3. copy the found paragraph to keep styling correct
-            P copy =  XmlUtils.deepCopy(p);
-
-            // replace the text elements from the copy
-            List<?> texts = getAllElementFromObject(copy, Text.class);
-            if (texts.size() > 0) {
-                Text textToReplace = (Text) texts.get(0);
-                textToReplace.setValue(ptext);
-            }
-
-            // add the paragraph to the document
-            test.getContent().add(copy);
-        }
-
-        // 4. remove the original one
-        ((ContentAccessor)p.getParent()).getContent().remove(p);*/
-
-        //第二步 插入图片
+        //第三步 插入图片
         replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
         return wordMLPackage;
+    }
+
+    /**
+     * 根据字符串参数替换段落
+     *
+     * @param documentPart
+     * @param paragraphParameters
+     */
+    private static void replaceParagraph(MainDocumentPart documentPart, HashMap<String, String> paragraphParameters) throws JAXBException, Docx4JException {
+        List<Object> tables = getAllElementFromObject(documentPart, Tbl.class);
+        for (Map.Entry<String, String> entries : paragraphParameters.entrySet()) {
+            final Tbl table = getTemplateTable(tables, entries.getKey());
+            final List<Object> allElementFromObject = getAllElementFromObject(table, P.class);
+            final P p = (P) allElementFromObject.get(1);
+            appendParaRContent(p, entries.getValue());
+        }
     }
 
     /**
@@ -122,11 +90,11 @@ public class DocxProducer {
      */
     public static void CreateDocxFromTemplate(String templatePath,
                                               HashMap<String, String> parameters,
-                                              HashMap<DataFieldName, String> bookMarkParameters,
+                                              HashMap<String, String> paragraphParameters,
                                               HashMap<String, String> imageParameters,
                                               String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, paragraphParameters, imageParameters);
 
         //保存
         saveDocx(wordMLPackage, savePath);
@@ -144,12 +112,12 @@ public class DocxProducer {
      */
     public static void CreateEncryptDocxFromTemplate(String templatePath,
                                                      HashMap<String, String> parameters,
-                                                     HashMap<DataFieldName, String> bookMarkParameters,
+                                                     HashMap<String, String> paragraphParameters,
                                                      HashMap<String, String> imageParameters,
                                                      String savePath,
                                                      String passWord)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, paragraphParameters, imageParameters);
 
         //加密
         ProtectDocument protection = new ProtectDocument(wordMLPackage);
@@ -170,11 +138,11 @@ public class DocxProducer {
      */
     public static void CreatePDFFromDocxTemplate(String templatePath,
                                                  HashMap<String, String> parameters,
-                                                 HashMap<DataFieldName, String> bookMarkParameters,
+                                                 HashMap<String, String> paragraphParameters,
                                                  HashMap<String, String> imageParameters,
                                                  String savePath)
             throws Exception {
-        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, bookMarkParameters, imageParameters);
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, paragraphParameters, imageParameters);
 
         //转化成PDF
         convertDocxToPDF(wordMLPackage, savePath);
