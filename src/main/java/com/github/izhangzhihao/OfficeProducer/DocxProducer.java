@@ -11,7 +11,6 @@ import org.docx4j.XmlUtils;
 import org.docx4j.dml.wordprocessingDrawing.Inline;
 import org.docx4j.finders.RangeFinder;
 import org.docx4j.jaxb.Context;
-import org.docx4j.model.fields.merge.DataFieldName;
 import org.docx4j.openpackaging.exceptions.Docx4JException;
 import org.docx4j.openpackaging.packages.ProtectDocument;
 import org.docx4j.openpackaging.packages.WordprocessingMLPackage;
@@ -19,10 +18,16 @@ import org.docx4j.openpackaging.parts.WordprocessingML.BinaryPartAbstractImage;
 import org.docx4j.openpackaging.parts.WordprocessingML.MainDocumentPart;
 import org.docx4j.wml.*;
 
+import javax.servlet.http.HttpServletResponse;
 import javax.xml.bind.JAXBElement;
 import javax.xml.bind.JAXBException;
 import java.io.*;
+import java.net.URLEncoder;
 import java.util.*;
+
+import static com.github.izhangzhihao.OfficeProducer.FileUtils.copy;
+import static com.github.izhangzhihao.OfficeProducer.FileUtils.inputStreamToFile;
+import static com.github.izhangzhihao.OfficeProducer.ListUtils.isNullOrEmpty;
 
 /**
  * 创建、操作Docx的一系列方法
@@ -38,9 +43,10 @@ public class DocxProducer {
     /**
      * 创建Docx的主方法
      *
-     * @param templatePath    模板docx路径
-     * @param parameters      参数和值
-     * @param imageParameters 书签和图片
+     * @param templatePath        模板docx路径
+     * @param parameters          参数和值
+     * @param paragraphParameters 段落参数
+     * @param imageParameters     书签和图片
      * @return
      */
     private static WordprocessingMLPackage CreateWordprocessingMLPackageFromTemplate(String templatePath,
@@ -53,30 +59,20 @@ public class DocxProducer {
         MainDocumentPart documentPart = wordMLPackage.getMainDocumentPart();
 
         //第一步 替换字符参数
-        replaceParameters(documentPart, parameters);
+        if (parameters != null) {
+            replaceParameters(documentPart, parameters);
+        }
 
         //第二步 替换段落
-        replaceParagraph(documentPart, paragraphParameters);
+        if (paragraphParameters != null) {
+            replaceParagraph(documentPart, paragraphParameters);
+        }
 
         //第三步 插入图片
-        replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
-        return wordMLPackage;
-    }
-
-    /**
-     * 根据字符串参数替换段落
-     *
-     * @param documentPart
-     * @param paragraphParameters
-     */
-    private static void replaceParagraph(MainDocumentPart documentPart, HashMap<String, String> paragraphParameters) throws JAXBException, Docx4JException {
-        List<Object> tables = getAllElementFromObject(documentPart, Tbl.class);
-        for (Map.Entry<String, String> entries : paragraphParameters.entrySet()) {
-            final Tbl table = getTemplateTable(tables, entries.getKey());
-            final List<Object> allElementFromObject = getAllElementFromObject(table, P.class);
-            final P p = (P) allElementFromObject.get(1);
-            appendParaRContent(p, entries.getValue());
+        if (imageParameters != null) {
+            replaceBookMarkWithImage(wordMLPackage, documentPart, imageParameters);
         }
+        return wordMLPackage;
     }
 
     /**
@@ -128,6 +124,75 @@ public class DocxProducer {
     }
 
     /**
+     * 创建Docx并加密，返回InputStream
+     *
+     * @param templatePath    模板docx路径
+     * @param parameters      参数和值
+     * @param imageParameters 书签和图片
+     * @return
+     */
+    public static InputStream CreateEncryptDocxStreamFromTemplate(String templatePath,
+                                                                  HashMap<String, String> parameters,
+                                                                  HashMap<String, String> paragraphParameters,
+                                                                  HashMap<String, String> imageParameters,
+                                                                  String passWord)
+            throws Exception {
+        WordprocessingMLPackage wordMLPackage = CreateWordprocessingMLPackageFromTemplate(templatePath, parameters, paragraphParameters, imageParameters);
+
+        //加密
+        ProtectDocument protection = new ProtectDocument(wordMLPackage);
+        protection.restrictEditing(STDocProtect.READ_ONLY, passWord);
+
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+        wordMLPackage.save(baos);
+
+        ByteArrayDataSource bads =
+                new ByteArrayDataSource(baos.toByteArray(), "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        return bads.getInputStream();
+
+    }
+
+    /**
+     * 根据模板创建docx文档并放到response的outputstream中
+     *
+     * @param templatePath
+     * @param parameter
+     * @param fileName
+     * @param response
+     */
+    public static void CreateEncryptDocxToResponseFromTemplate(String templatePath,
+                                                               HashMap<String, String> parameter,
+                                                               HashMap<String, String> paragraphParameters,
+                                                               HashMap<String, String> imageParameters,
+                                                               String fileName,
+                                                               HttpServletResponse response) throws Exception {
+        final InputStream inputStream = CreateEncryptDocxStreamFromTemplate(templatePath, parameter, paragraphParameters, imageParameters, UUID.randomUUID().toString());
+
+        response.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        response.addHeader("Content-Disposition", "attachment; filename=" + URLEncoder.encode(fileName, "utf-8"));
+        copy(inputStream, response.getOutputStream());
+    }
+
+    /**
+     * 根据模板创建docx文档返回File
+     *
+     * @param templatePath
+     * @param parameter
+     * @param fileName
+     */
+    public static File CreateEncryptDocxFileFromTemplate(String templatePath,
+                                                         HashMap<String, String> parameter,
+                                                         HashMap<String, String> paragraphParameters,
+                                                         HashMap<String, String> imageParameters,
+                                                         String fileName) throws Exception {
+        final InputStream inputStream = CreateEncryptDocxStreamFromTemplate(templatePath, parameter, paragraphParameters, imageParameters, UUID.randomUUID().toString());
+        File file = new File(fileName);
+        inputStreamToFile(inputStream, file);
+        return file;
+    }
+
+    /**
      * 从Docx模板文件创建Docx然后转化为pdf
      *
      * @param templatePath    模板docx路径
@@ -169,18 +234,58 @@ public class DocxProducer {
     private static void replaceParameters(MainDocumentPart documentPart,
                                           HashMap<String, String> parameters)
             throws JAXBException, Docx4JException {
-        // Approach 1 (from 3.0.0; faster if you haven't yet caused unmarshalling to occur):
         documentPart.variableReplace(parameters);
-
-        // Approach 2 (original)
-
-        // unmarshallFromTemplate requires string input
-        /*String xml = XmlUtils.marshaltoString(documentPart.getContents(), true);
-        // Do it...
-        Object obj = XmlUtils.unmarshallFromTemplate(xml, parameters);
-        // Inject result into docx
-        documentPart.setJaxbElement((Document) obj);*/
     }
+
+    /**
+     * 根据字符串参数替换段落
+     *
+     * @param documentPart
+     * @param paragraphParameters
+     */
+    private static void replaceParagraph(MainDocumentPart documentPart, HashMap<String, String> paragraphParameters) throws JAXBException, Docx4JException {
+        //List<Object> tables = getAllElementFromObject(documentPart, Tbl.class);
+        /*for (Map.Entry<String, String> entries : paragraphParameters.entrySet()) {
+            final Tbl table = getTemplateTable(tables, entries.getKey());
+            final List<Object> allElementFromObject = getAllElementFromObject(table, P.class);
+            final P p = (P) allElementFromObject.get(1);
+            appendParaRContent(p, entries.getValue());
+        }*/
+        final List<Object> allElementFromObject = getAllElementFromObject(documentPart, P.class);
+        //final P p = (P) allElementFromObject.get(22);
+
+        for (Object paragraph : allElementFromObject) {
+            final P para = (P) paragraph;
+            if (!isNullOrEmpty(para.getContent())) {
+                final List<Object> content = para.getContent();
+                final String stringFromContent = getStringFromContent(content);
+                final String s = paragraphParameters.get(stringFromContent);
+                if (s != null) {
+                    appendParaRContent(para, s);
+                }
+            }
+        }
+    }
+
+    /**
+     * 从Content中获得内容
+     *
+     * @param content
+     * @return
+     */
+    public static String getStringFromContent(List<Object> content) {
+        String temp = "";
+        for (Object o : content) {
+            if (o.getClass() == R.class) {
+                final Object text = ((JAXBElement) ((R) o).getContent().get(0)).getValue();
+                if (text.getClass() == Text.class) {
+                    temp += ((Text) text).getValue();
+                }
+            }
+        }
+        return temp;
+    }
+
 
     /**
      * 替换书签为图片
@@ -192,7 +297,7 @@ public class DocxProducer {
      */
     private static void replaceBookMarkWithImage(WordprocessingMLPackage wordMLPackage,
                                                  MainDocumentPart documentPart,
-                                                 HashMap<String, String> imageParameters)
+                                                 Map<String, String> imageParameters)
             throws Exception {
         Document wmlDoc = documentPart.getContents();
         Body body = wmlDoc.getBody();
@@ -219,153 +324,46 @@ public class DocxProducer {
                 // 获取该书签的父级段落
                 P p = (P) (bm.getParent());
                 ObjectFactory factory = new ObjectFactory();
-                // R对象是匿名的复杂类型，然而我并不知道具体啥意思，估计这个要好好去看看ooxml才知道
+                // 新建一个Run
                 R run = factory.createR();
-                // drawing理解为画布？
+                // drawing 画布
                 Drawing drawing = factory.createDrawing();
-                drawing.getAnchorOrInline().add(inline);
-                run.getContent().add(drawing);
-                p.getContent().add(run);
+                drawing.getAnchorOrInline()
+                        .add(inline);
+                run.getContent()
+                        .add(drawing);
+                p.getContent()
+                        .add(run);
             }
         }
     }
 
+
     /**
-     * docx文档转换为PDF
+     * 获取模板中的表格
      *
-     * @param wordMLPackage
-     * @param pdfPath       PDF文档存储路径
-     * @throws Exception
+     * @param tables
+     * @param templateKey
+     * @return
+     * @throws Docx4JException
+     * @throws JAXBException
      */
-    public static void convertDocxToPDF(WordprocessingMLPackage wordMLPackage,
-                                        String pdfPath)
-            throws Exception {
-        //HashSet<String> features = new HashSet<>();
-        //features.add(PP_PDF_APACHEFOP_DISABLE_PAGEBREAK_LIST_ITEM);
-        //WordprocessingMLPackage process = Preprocess.process(wordMLPackage, features);
-
-        FileOutputStream fileOutputStream = new FileOutputStream(pdfPath);
-        Docx4J.toPDF(wordMLPackage, fileOutputStream);
-        fileOutputStream.flush();
-        fileOutputStream.close();
-
-        /*FOSettings foSettings = Docx4J.createFOSettings();
-        foSettings.setWmlPackage(wordMLPackage);
-        Docx4J.toFO(foSettings, fileOutputStream, Docx4J.FLAG_EXPORT_PREFER_XSL);*/
-    }
-
-
-    /**
-     * 将书签替换为文字
-     *
-     * @param documentPart
-     * @param data
-     * @throws Exception
-     */
-    private static void replaceBookmarkContents(MainDocumentPart documentPart, Map<DataFieldName, String> data) throws Exception {
-
-        org.docx4j.wml.Document wmlDocumentEl = documentPart.getContents();
-        Body body = wmlDocumentEl.getBody();
-        List<Object> paragraphs = body.getContent();
-
-        RangeFinder rt = new RangeFinder("CTBookmark", "CTMarkupRange");
-        new TraversalUtil(paragraphs, rt);
-
-        for (CTBookmark bm : rt.getStarts()) {
-
-            // do we have data for this one?
-            if (bm.getName() == null) continue;
-            String value = data.get(new DataFieldName(bm.getName()));
-            if (value == null) continue;
-
-            try {
-                // Can't just remove the object from the parent,
-                // since in the parent, it may be wrapped in a JAXBElement
-                List<Object> theList = null;
-                if (bm.getParent() instanceof P) {
-                    theList = ((ContentAccessor) (bm.getParent())).getContent();
-                } else {
-                    continue;
-                }
-
-                int rangeStart = -1;
-                int rangeEnd = -1;
-                int i = 0;
-                for (Object ox : theList) {
-                    Object listEntry = XmlUtils.unwrap(ox);
-                    if (listEntry.equals(bm)) {
-                        if (DELETE_BOOKMARK) {
-                            rangeStart = i;
-                        } else {
-                            rangeStart = i + 1;
-                        }
-                    } else if (listEntry instanceof CTMarkupRange) {
-                        if (((CTMarkupRange) listEntry).getId().equals(bm.getId())) {
-                            if (DELETE_BOOKMARK) {
-                                rangeEnd = i;
-                            } else {
-                                rangeEnd = i - 1;
-                            }
-                            break;
-                        }
-                    }
-                    i++;
-                }
-
-                if (rangeStart > 0 && rangeEnd > rangeStart) {
-
-                    // Delete the bookmark range
-                    for (int j = rangeEnd; j >= rangeStart; j--) {
-                        theList.remove(j);
-                    }
-
-                    // now add a run
-                    org.docx4j.wml.R run = factory.createR();
-                    org.docx4j.wml.Text t = factory.createText();
-                    run.getContent().add(t);
-                    t.setValue(value);
-
-                    theList.add(rangeStart, run);
-                }
-
-            } catch (ClassCastException cce) {
-                log.error(cce.getMessage(), cce);
+    private static Tbl getTemplateTable(List<Object> tables, String templateKey) throws Docx4JException, JAXBException {
+        for (Object tbl : tables) {
+            List<?> textElements = getAllElementFromObject(tbl, Text.class);
+            for (Object text : textElements) {
+                Text textElement = (Text) text;
+                if (textElement.getValue() != null && textElement.getValue().equals(templateKey))
+                    return (Tbl) tbl;
             }
         }
+        return null;
     }
 
-
-    /**
-     * @param wordMLPackage
-     * @param content
-     * @Description: 添加段落内容
-     */
-    public static void appendParaRContent(WordprocessingMLPackage wordMLPackage, String content) {
-        if (content != null) {
-            R run = new R();
-            P p = factory.createP();
-            p.getContent().add(run);
-            String[] contentArr = content.split("\n");
-            Text text = new Text();
-            text.setSpace("preserve");
-            text.setValue("    " + contentArr[0]);
-            run.getContent().add(text);
-
-            for (int i = 1, len = contentArr.length; i < len; i++) {
-                Br br = new Br();
-                run.getContent().add(br);// 换行
-                text = new Text();
-                text.setSpace("preserve");
-                text.setValue("    " + contentArr[i]);
-                run.getContent().add(text);
-            }
-            wordMLPackage.getMainDocumentPart().addObject(p);
-        }
-    }
 
     /**
      * @param content
-     * @Description: 添加段落内容
+     * @Description: 追加段落内容
      */
     public static void appendParaRContent(P p, String content) {
         List<?> texts = getAllElementFromObject(p, Text.class);
@@ -393,6 +391,32 @@ public class DocxProducer {
         }
     }
 
+
+    /**
+     * docx文档转换为PDF
+     *
+     * @param wordMLPackage
+     * @param pdfPath       PDF文档存储路径
+     * @throws Exception
+     */
+    public static void convertDocxToPDF(WordprocessingMLPackage wordMLPackage,
+                                        String pdfPath)
+            throws Exception {
+        //HashSet<String> features = new HashSet<>();
+        //features.add(PP_PDF_APACHEFOP_DISABLE_PAGEBREAK_LIST_ITEM);
+        //WordprocessingMLPackage process = Preprocess.process(wordMLPackage, features);
+
+        FileOutputStream fileOutputStream = new FileOutputStream(pdfPath);
+        Docx4J.toPDF(wordMLPackage, fileOutputStream);
+        fileOutputStream.flush();
+        fileOutputStream.close();
+
+        /*FOSettings foSettings = Docx4J.createFOSettings();
+        foSettings.setWmlPackage(wordMLPackage);
+        Docx4J.toFO(foSettings, fileOutputStream, Docx4J.FLAG_EXPORT_PREFER_XSL);*/
+    }
+
+
     /**
      * see <a href='http://blog.csdn.net/zhyh1986/article/details/8766628'></a>
      * 允许你针对一个特定的类来搜索指定元素以及它所有的孩子，例如，你可以用它获取文档中所有的表格、表格中所有的行以及其它类似的操作
@@ -416,26 +440,6 @@ public class DocxProducer {
         return result;
     }
 
-    /**
-     * 获取模板中的表格
-     *
-     * @param tables
-     * @param templateKey
-     * @return
-     * @throws Docx4JException
-     * @throws JAXBException
-     */
-    private static Tbl getTemplateTable(List<Object> tables, String templateKey) throws Docx4JException, JAXBException {
-        for (Object tbl : tables) {
-            List<?> textElements = getAllElementFromObject(tbl, Text.class);
-            for (Object text : textElements) {
-                Text textElement = (Text) text;
-                if (textElement.getValue() != null && textElement.getValue().equals(templateKey))
-                    return (Tbl) tbl;
-            }
-        }
-        return null;
-    }
 
     /**
      * 替换段落
