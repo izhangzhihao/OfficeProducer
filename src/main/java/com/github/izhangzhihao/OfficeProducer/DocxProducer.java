@@ -274,16 +274,16 @@ public class DocxProducer {
      * @return
      */
     public static String getStringFromContent(List<Object> content) {
-        String temp = "";
+        StringBuilder contentStr = new StringBuilder();
         for (Object o : content) {
             if (o.getClass() == R.class) {
                 final Object text = ((JAXBElement) ((R) o).getContent().get(0)).getValue();
                 if (text.getClass() == Text.class) {
-                    temp += ((Text) text).getValue();
+                    contentStr.append(((Text) text).getValue());
                 }
             }
         }
-        return temp;
+        return contentStr.toString();
     }
 
 
