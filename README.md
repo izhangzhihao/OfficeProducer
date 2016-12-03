@@ -1,4 +1,4 @@
-# OfficeProducer
+# OfficeProducer [![Build Status](https://travis-ci.org/izhangzhihao/OfficeProducer.svg?branch=master)](https://travis-ci.org/izhangzhihao/OfficeProducer)
 
 ## This project is based on [Docx4j](https://github.com/plutext/docx4j) (for docx) and [POI](https://poi.apache.org/) (for doc)
 
